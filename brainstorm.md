@@ -91,6 +91,7 @@ Each round-lead writes two files:
 ## Surviving Ideas
 - [S1] Title — one-line description. Support: X/Y votes. Key challenge weathered: ...
 - [S2] ...
+- [S3] [lead-rescued] Title — one-line description. Support: X/Y votes. Rescued because: ...
 
 ## Cut Ideas
 - [C1] Title — reason (strongest objection)
@@ -211,7 +212,7 @@ After all agents post their combined challenge-and-vote messages (if any agent h
 2. **Count support.** For each idea, tally how many agents voted for it.
 3. **Survival threshold: majority support (external votes only).** Self-votes are not permitted. If an agent proposed a MERGE [Ia]+[Ib], they may not vote for either constituent idea, but may vote for other merged combinations they did not propose. When agents ≥ 3, the majority threshold is ≥2 external votes. When only 2 agents are in a round, the threshold is ≥1 external vote. An idea survives if it meets this threshold.
 4. **Apply a soft cap of 10.** If more than 10 ideas clear the threshold, keep only the top 10 by vote count. Break ties by preferring ideas that survived challenges without needing modification.
-5. **Preserve one strong minority idea.** If exactly one idea fell just below threshold but its justifications were substantive and it raises a concern no surviving idea covers, carry it forward marked as `[minority]`. Do not use this to rescue weak ideas.
+5. **Lead curation.** Review ideas that fell below threshold. If an idea was cut primarily by role-structural opposition (e.g., a minimalist opposing on complexity grounds without citing a concrete failure mode) rather than evidence-based challenge, the lead may rescue it. This is a light touch — only intervene when the opposition lacked specific evidence. Mark rescued ideas as `[lead-rescued]` with a one-line reason. Do not rescue more than 2 ideas per round.
 6. **Record cuts.** For each cut idea, record the vote count and the strongest objection against it.
 
 The natural trajectory with these rules: Round 1 typically produces 6-9 survivors from 12-20 proposals. Round 2's harder roles cut further to 4-6. The final round should yield 3-5 strong recommendations. If you end with more than 8 after the final round, the convergence was too loose — trim by applying stricter majority (e.g., require 3 out of 4 votes) and re-cut.
