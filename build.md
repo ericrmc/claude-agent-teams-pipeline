@@ -34,13 +34,13 @@ Print: `[Pipeline] Starting Phase 1: Brainstorm. Running {n} rounds with {agents
 
 Read `~/.claude/commands/brainstorm.md` and follow its full protocol, using the task as the problem statement. Pass through `--rounds`, `--keep`, and `--agents` flags.
 
-This produces a brainstorm output markdown file with ranked recommendations.
+This produces a brainstorm output markdown file with ranked recommendations, plus per-round working files (`brainstorm-rN-results.md` and `brainstorm-rN-transcript.md`).
 
 When the brainstorm is complete:
 
 1. Print: `[Pipeline] Phase 1 complete. Brainstorm output: {path}. Presenting recommendations.`
 2. Write a checkpoint to `.pipeline/checkpoint-{YYYYMMDD-HHmmss}.md` with: `phase_completed: brainstorm`, `brainstorm_output_path: {path}`, `timestamp: {ISO timestamp}`, `pipeline_version: 1.0`.
-3. Before proceeding to Phase 2, confirm silently: (1) Shutdown request sent to all brainstorm agents and all have confirmed completion or gone idle? (2) Output file written to disk? (3) Top recommendations extracted? If any check fails, resolve before presenting to user.
+3. Before proceeding to Phase 2, confirm silently: (1) All round-lead agents have completed and written their handoff files? (2) Final output file written to disk? (3) Top recommendations extracted? If any check fails, resolve before presenting to user.
 
 Proceed to Phase 2.
 
@@ -237,7 +237,7 @@ Remaining: {count, with IDs and brief reasons}
 
 ## Notes
 
-- **Token cost.** This is the most resource-intensive workflow. Brainstorm (default: 12 context windows) + Implementation (up to 4) + Review-fix (up to 8 per iteration × 3 iterations). For a full default run: ~40 context windows. Use `--rounds 2 --agents 3` for smaller problems, or `--skip-brainstorm` if the design is already decided.
+- **Token cost.** This is the most resource-intensive workflow. Brainstorm (default: ~13 context windows — 3 round-leads + ~10 agents with tapering) + Implementation (up to 4) + Review-fix (up to 8 per iteration × 3 iterations). For a full default run: ~40 context windows. Round isolation in the brainstorm phase prevents cross-round context accumulation. Use `--rounds 2 --agents 3` for smaller problems, or `--skip-brainstorm` if the design is already decided.
 - **Approval gates are load-bearing.** The brainstorm → implementation gate prevents building the wrong thing. The triage gate in review-fix prevents fixing non-issues. Unless `--auto` is set, always pause for user input at these points.
 - **The brainstorm document persists.** Even after implementation and review, the design rationale lives in the output file. This is valuable for onboarding, future changes, or understanding why a particular approach was chosen over alternatives.
 - **Incremental use.** You don't have to run the full pipeline. Use `/brainstorm` alone for design decisions. Use `/review-fix` alone for existing code. Use `/build --skip-brainstorm` when you already know what to build. Use `/build --skip-review` when you want design + implementation without the review loop.

@@ -49,15 +49,89 @@ Before each round, select {agents} roles following these rules:
 
 ---
 
-## Round Structure
+## Agent Count Tapering
 
-Repeat this structure for each round. Between rounds, the surviving ideas carry forward with their challenge history.
+The default `--agents N` value applies to Round 1. Later rounds use fewer agents since convergence strengthens and diminishing returns set in:
+
+- **Round 1:** {agents} agents (maximum divergence)
+- **Round 2:** {agents - 1} agents (minimum 2)
+- **Round 3+:** {agents - 1} agents (minimum 2)
+
+For example, with the default of 4: Round 1 uses 4, Rounds 2+ use 3. With `--agents 3`: Round 1 uses 3, Rounds 2+ use 2.
+
+---
+
+## Round Isolation
+
+Each round runs as a **separate lead agent** with its own team. This prevents cross-round context accumulation — each round-lead's context contains only its own round's messages.
+
+### Orchestration flow
+
+```
+Main orchestrator:
+  1. Spawn R1-lead agent → creates brainstorm-r1 team → writes brainstorm-r1-results.md + brainstorm-r1-transcript.md
+  2. Spawn R2-lead agent (reads r1-results.md) → creates brainstorm-r2 team → writes brainstorm-r2-results.md + brainstorm-r2-transcript.md
+  3. Spawn R3-lead agent (reads r2-results.md) → creates brainstorm-r3 team → writes brainstorm-r3-results.md + brainstorm-r3-transcript.md
+  4. Read all transcript files → synthesise final output
+```
+
+Each round-lead creates its own team (`brainstorm-r1`, `brainstorm-r2`, etc.) and shuts it down completely before writing results. The file-based handoff is the only communication channel between rounds.
+
+### Two-file handoff per round
+
+Each round-lead writes two files:
+
+1. **`brainstorm-rN-results.md`** (compact, structured) — what the next round-lead reads as input. ~1-2k tokens.
+2. **`brainstorm-rN-transcript.md`** (detailed, append-only) — full agent ideas, challenges, and votes. Reference archive for final synthesis.
+
+**Results file format:**
+```markdown
+# Round N Results
+
+## Surviving Ideas
+- [S1] Title — one-line description. Support: X/Y votes. Key challenge weathered: ...
+- [S2] ...
+
+## Cut Ideas
+- [C1] Title — reason (strongest objection)
+
+## Unresolved Dissent
+- Concern — raised by role, relevant if: condition
+
+## Role Selection Notes for Next Round
+- Suggested roles and reasoning
+```
+
+**Transcript file format:**
+```markdown
+# Round N Transcript
+
+## Roles: [list]
+
+## Phase A: Ideas
+### [Agent Name] — [Role]
+[Full text of ideas as posted]
+
+## Phase B: Challenge & Vote
+### [Agent Name] — [Role]
+[Full text of challenges and votes as posted]
+
+## Lead Notes
+[Any observations the round-lead made during orchestration — non-responsive agents,
+ consensus patterns, merge proposals that emerged organically]
+```
+
+---
+
+## Round Structure (for each round-lead)
+
+The main orchestrator spawns a round-lead agent with instructions to follow this structure. The round-lead creates a team, runs the phases below, shuts down the team, and writes the two handoff files.
 
 ### Phase A: DIVERGE
 
 Before spawning, emit a status line: `[Round {n}/{total}] Spawning {agent count} agents: {role list}`
 
-Spawn {agents} teammates with the selected roles.
+Create a new team (`brainstorm-r{n}`) and spawn {round agent count} teammates with the selected roles.
 
 #### Agent spawn prompt template
 
@@ -79,7 +153,7 @@ Use this template for every agent. Replace `{PROBLEM}`, `{ROLE}`, `{PERSPECTIVE}
 > Ideas surviving from previous rounds (these have already been challenged and defended):
 >
 > {For each surviving idea:}
-> - [{ID}] {title} — {one-line description}. Supported by {vote count} agents. Survived challenges: {key objections it weathered}.
+> - [{ID}] {title} — {one-line description}. Dissent: {unresolved concern or "none"}.
 >
 > You may: build on these, propose modifications, argue to keep or cut, or propose entirely new ideas.
 >
@@ -89,62 +163,70 @@ Use this template for every agent. Replace `{PROBLEM}`, `{ROLE}`, `{PERSPECTIVE}
 >
 > **Step 1 — Think independently.** Consider the problem through your lens. DO NOT read messages from other teammates yet. Take your time.
 >
-> **Step 2 — Post your ideas.** Message all teammates. For each idea:
+> **Step 2 — Post your ideas.** Message all teammates in a **single message**. For each idea:
 >
 > ```
 > [I{n}] {title}
-> What: {2-3 sentences — what it is and how it works}
-> Why: {why this is worth doing, from your perspective}
-> Risk: {the biggest risk or weakness you see in your own idea}
+> What: {2-3 sentences max — what it is and how it works}
+> Why: {1 sentence — why this is worth doing, from your perspective}
+> Risk: {1 sentence — the biggest risk or weakness you see in your own idea}
 > ```
 >
-> Round 1 agents: propose 3-5 ideas.
-> Later round agents: propose new ideas AND/OR argue for modifications to surviving ones. You may also argue to cut a surviving idea if you think it's weak.
+> **Length limits:** 100 words max per idea. Round 1 agents: propose 3-5 ideas. Later round agents: propose new ideas AND/OR argue for modifications to surviving ones. You may also argue to cut a surviving idea if you think it's weak.
 >
-> **Step 3 — Wait for the challenge phase.** Do NOT respond to other agents yet. Wait for the lead's signal.
+> **Step 3 — Wait for the challenge-and-vote phase.** Do NOT respond to other agents yet. Wait for the lead's signal.
 
 If any agent has not posted after the others have all completed, proceed with the agents that did respond and note the non-response.
 
-### Phase B: CHALLENGE
+### Phase B: CHALLENGE & VOTE (combined)
 
-Once all agents have posted their ideas, emit a status line: `[Round {n}] All {agent count} agents posted ideas. Starting challenge phase.`
+Once all agents have posted their ideas, emit a status line: `[Round {n}] All {agent count} agents posted ideas. Starting challenge-and-vote phase.`
 
 Then broadcast:
 
-> *"All ideas are posted. Challenge phase: read every idea from every agent. Stress-test them. Your job is to find weaknesses and poke holes — but be specific and fair. A good challenge identifies a concrete failure mode, not a vague concern."*
+> *"All ideas are posted. Read every idea from every agent. In a SINGLE message, do both:*
+>
+> *1. Challenge: stress-test each idea. Be specific and fair — identify concrete failure modes, not vague concerns.*
+>
+> *2. Vote: state which ideas should survive to the next round with a one-line justification for each. Vote for as many as you genuinely believe deserve to continue — don't vote strategically. **You may not vote for ideas you originally proposed in this round.** Vote only for ideas proposed by other agents.*
+>
+> *Use these labels for challenges:*
+> - *STRONG [In] — this holds up, here's why: {evidence}*
+> - *WEAK [In] — specific problem: {the problem}*
+> - *MODIFY [In] — would be stronger if: {specific change}*
+> - *MERGE [Ia]+[Ib] — these combine well: {how}*
+>
+> *Then list your votes:*
+> - *VOTE [In] — {one-line justification}*
+>
+> *50 words max per challenge assessment. Post everything in ONE message."*
 
-Agents respond to each other's ideas using:
-- **STRONG [In]** — this holds up, here's why: {evidence or reasoning}
-- **WEAK [In]** — this has a specific problem: {the problem and why it matters}
-- **MODIFY [In]** — this would be stronger if: {specific change and why}
-- **MERGE [Ia]+[Ib]** — these two ideas combine well: {how and why}
+If agents start posting follow-ups, broadcast: *"Finalise your positions — we're moving to convergence."* Allow at most one round of brief back-and-forth.
 
-Allow 1-2 rounds of back-and-forth. If agents start repeating themselves, broadcast: *"Finalise your positions — we're moving to convergence."*
+### Convergence
 
-### Phase C: CONVERGE
-
-Broadcast:
-
-> *"Challenge phase complete. Each agent: vote on which ideas should survive to the next round. Post your votes with a one-line justification for each. Vote for as many as you genuinely believe deserve to continue — don't vote strategically. **You may not vote for ideas you originally proposed in this round.** Vote only for ideas proposed by other agents. Voting for your own ideas is not permitted — this prevents anchoring bias from inflating your proposals' survival chances."*
-
-After all agents post their votes (if any agent has not posted votes after the others have all completed, proceed with available votes and note the non-response):
+After all agents post their combined challenge-and-vote messages (if any agent has not posted after the others have all completed, proceed with available responses and note the non-response):
 
 1. **Shut down all agents and clean up the team.**
 2. **Count support.** For each idea, tally how many agents voted for it.
-3. **Survival threshold: majority support (external votes only).** Self-votes are not permitted. If an agent proposed a MERGE [Ia]+[Ib], they may not vote for either constituent idea, but may vote for other merged combinations they did not propose. With 4 agents, each idea can receive at most 3 external votes. With 3 agents, each idea can receive at most 2 external votes (so survival requires 2/2 — effectively unanimous among external voters; the minority-idea preservation rule in step 5 catches genuinely strong ideas that fall just short). With 2 agents, each idea can receive at most 1 external vote; an idea needs 1 external vote (unanimous agreement) to survive — the minority-idea preservation rule in step 5 still applies. When agents ≥ 3, the majority threshold is ≥2 external votes. When only 2 agents are in a round, the threshold is ≥1 external vote. An idea survives if it meets this threshold. This self-calibrates — if 3 ideas are genuinely strong, 3 survive; if 9 are, 9 survive.
-4. **Apply a soft cap of 10.** If more than 10 ideas clear the threshold (agents were too generous), keep only the top 10 by vote count. Break ties by preferring ideas that survived challenges without needing modification.
+3. **Survival threshold: majority support (external votes only).** Self-votes are not permitted. If an agent proposed a MERGE [Ia]+[Ib], they may not vote for either constituent idea, but may vote for other merged combinations they did not propose. When agents ≥ 3, the majority threshold is ≥2 external votes. When only 2 agents are in a round, the threshold is ≥1 external vote. An idea survives if it meets this threshold.
+4. **Apply a soft cap of 10.** If more than 10 ideas clear the threshold, keep only the top 10 by vote count. Break ties by preferring ideas that survived challenges without needing modification.
 5. **Preserve one strong minority idea.** If exactly one idea fell just below threshold but its justifications were substantive and it raises a concern no surviving idea covers, carry it forward marked as `[minority]`. Do not use this to rescue weak ideas.
 6. **Record cuts.** For each cut idea, record the vote count and the strongest objection against it.
 
 The natural trajectory with these rules: Round 1 typically produces 6-9 survivors from 12-20 proposals. Round 2's harder roles cut further to 4-6. The final round should yield 3-5 strong recommendations. If you end with more than 8 after the final round, the convergence was too loose — trim by applying stricter majority (e.g., require 3 out of 4 votes) and re-cut.
 
-After tallying votes and applying the survival rules, emit a status line: `[Round {n}] Convergence complete. {survived} ideas survive, {cut} cut. {next action}.`
+### Write handoff files
+
+Write the two handoff files (`brainstorm-r{n}-results.md` and `brainstorm-r{n}-transcript.md`) using the formats defined above.
+
+Emit a status line: `[Round {n}] Convergence complete. {survived} ideas survive, {cut} cut. {next action}.`
 
 Where `{next action}` is either "Starting Round {n+1}." or "Moving to final output." for the last round.
 
-### Between rounds
+### Between rounds (main orchestrator)
 
-Before starting the next round, present to the user:
+After the round-lead agent completes, read `brainstorm-r{n}-results.md` and present to the user:
 
 ```
 ## Round {n} Complete
@@ -156,13 +238,21 @@ Cut:
 {for each: [ID] title — reason (strongest objection)}
 
 Next round roles: {selected roles and one-line reason for each selection}
+
+Full transcript: brainstorm-r{n}-transcript.md
 ```
 
-Dissent is any WEAK or MODIFY challenge that was not fully addressed during the challenge phase. `{agent role name}` is the role that raised the concern (e.g., "minimalist"). If no agent raised unresolved concerns, show "Dissent: none". Always reference the full output file path so the user can review complete agent transcripts rather than relying solely on this summary.
+### Idle notification handling
+
+The round-lead should treat the **first idle notification** from an agent after a substantive message as "this agent is done." Ignore subsequent idle notifications from the same agent until you send them a new message. Do not respond to or acknowledge repeated idle notifications — they carry zero additional information.
 
 ---
 
 ## After All Rounds
+
+### Synthesise from transcript files
+
+Read all transcript files (`brainstorm-r1-transcript.md` through `brainstorm-r{n}-transcript.md`) and the final round's results file. The transcripts contain the full reasoning chains — specific challenge exchanges, defenses, and merge proposals — that the compact results files omit. Use these to write a high-quality final output.
 
 ### Write output file
 
@@ -251,7 +341,8 @@ Show:
 ## Notes
 
 - **Diversity is the mechanism.** If you pick 4 similar roles, the brainstorm collapses into groupthink. The value comes from genuinely different perspectives colliding. Review your role selections critically.
-- **History carries forward.** Later rounds MUST see what survived and what was challenged. Without this, agents re-propose cut ideas or miss known weaknesses. Include the surviving ideas and their challenge history in the spawn prompt.
+- **History carries forward.** Later rounds MUST see what survived and what was challenged. The results file handoff carries this between rounds — agents don't need the full transcript, just the compact surviving-idea list.
 - **Idea count trajectory.** Round 1 with 4 agents × 3-5 ideas = 12-20 raw ideas. Converging to 8 cuts ~50-60%. By the final round you should have 3-5 strong, well-tested recommendations. If you end with more than 8, your convergence is too loose. If you end with fewer than 3, it's too aggressive.
-- **Token cost.** {rounds} rounds × {agents} agents = {rounds × agents} context windows. Default is 12. This is token-intensive by design — the value is in the diversity of perspectives. For simpler problems, use `--rounds 2 --agents 3`.
+- **Token cost.** Default (3 rounds, 4/3/3 agents) = ~10 agent context windows + 3 round-lead windows. Round isolation prevents cross-round context accumulation — each round-lead's context is bounded by its own round. For simpler problems, use `--rounds 2 --agents 3`.
+- **Intermediate files.** Each round produces `brainstorm-rN-results.md` and `brainstorm-rN-transcript.md`. These are working files consumed during synthesis and can be cleaned up after the final output is written. The transcript files preserve the detailed reasoning chains that make the final output high-quality.
 - **Not just for code.** This skill works for architecture decisions, product direction, process design, or any problem that benefits from structured multi-perspective analysis. The output file serves as a design rationale document regardless of whether implementation follows.

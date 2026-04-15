@@ -6,7 +6,7 @@ Three slash commands for structured multi-agent workflows in Claude Code:
 
 | Command | What it does |
 |---------|-------------|
-| `/brainstorm` | Multi-round ideation with diverse agent teams. Each round: independent proposals, cross-challenge, convergence vote. Roles rotate to prevent groupthink. |
+| `/brainstorm` | Multi-round ideation with diverse agent teams. Each round runs as an isolated lead agent: independent proposals, combined challenge-and-vote, convergence. Roles rotate and agent count tapers across rounds. |
 | `/review-fix` | Independent review by 3 agents (correctness, robustness, quality), triage, parallel fixes, verification. Loops until clean or max iterations reached. |
 | `/build` | Full pipeline: brainstorm → user approves design → parallel implementation → review-fix loop. |
 
@@ -61,7 +61,7 @@ In any Claude Code session, type the slash command:
 
 ### `/brainstorm <problem>`
 
-Runs a configurable multi-round brainstorm with agents playing distinct roles (creative inventor, pragmatic engineer, security hardener, minimalist, devil's advocate, etc.). Each round: agents ideate independently, challenge each other's ideas, then vote — with self-voting excluded to prevent anchoring bias. Produces a ranked recommendation document.
+Runs a configurable multi-round brainstorm with agents playing distinct roles (creative inventor, pragmatic engineer, security hardener, minimalist, devil's advocate, etc.). Each round runs as an isolated lead agent with its own team — preventing cross-round context accumulation. Agents ideate independently, then challenge and vote in a single combined phase. Agent count tapers in later rounds (e.g., 4→3→3). Self-voting is excluded to prevent anchoring bias. Produces a ranked recommendation document with per-round transcripts preserving full reasoning chains.
 
 **Flags:**
 - `--rounds N` — number of rounds (default: 3)
@@ -110,9 +110,9 @@ These workflows are token-intensive by design — the value is in the diversity 
 
 | Command | Default cost |
 |---------|-------------|
-| `/brainstorm` | ~12 context windows (3 rounds × 4 agents) |
+| `/brainstorm` | ~13 context windows (3 round-leads + ~10 agents with tapering; round-isolated) |
 | `/review-fix` | ~8 per iteration (3 reviewers + up to 4 developers + 2 verifiers) |
-| `/build` | ~40 for a full default run |
+| `/build` | ~40 for a full default run (brainstorm rounds are context-isolated) |
 
 For smaller problems: `--rounds 2 --agents 3`. For known designs: `--skip-brainstorm`.
 
