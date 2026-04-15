@@ -1,6 +1,7 @@
 # Claude Code Pipeline Commands
 
-Based on `https://github.com/kiran-agentic/agentcouncil` but made with commands instead of a plugin with MCP server.
+Based on [Agent Council](https://github.com/kiran-agentic/agentcouncil), but made with commands instead of a plugin with MCP server.
+
 Three slash commands for structured multi-agent workflows in Claude Code:
 
 | Command | What it does |
