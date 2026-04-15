@@ -5,8 +5,8 @@ Three slash commands for structured multi-agent workflows in Claude Code:
 | Command | What it does |
 |---------|-------------|
 | `/brainstorm` | Multi-round ideation with diverse agent teams. Each round: independent proposals, cross-challenge, convergence vote. Roles rotate to prevent groupthink. |
-| `/build` | Full pipeline: brainstorm → user approves design → parallel implementation → review-fix loop. |
 | `/review-fix` | Independent review by 3 agents (correctness, robustness, quality), triage, parallel fixes, verification. Loops until clean or max iterations reached. |
+| `/build` | Full pipeline: brainstorm → user approves design → parallel implementation → review-fix loop. |
 
 These commands were refined by running them on their own source. The original designs were enhanced through a `/build` pipeline run targeting the command files themselves: a 3-round `/brainstorm` produced 5 improvement recommendations, a parallel developer team implemented them across all three files, and a `/review-fix` loop validated and corrected the implementation — 22 findings found, 21 fixed and verified in a single iteration.
 
