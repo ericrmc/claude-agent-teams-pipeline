@@ -109,6 +109,7 @@ Chains `/brainstorm` and `/review-fix` around a parallel implementation phase. B
 - `--max-review-iterations N` — passed to review-fix phase
 - `--auto` — skip all approval gates
 - `--skip-brainstorm` — go straight to implementation (supply a design description)
+- `--from-brainstorm PATH` — skip brainstorm, use an existing brainstorm output file (e.g., from a previous `/brainstorm` session)
 - `--skip-review` — stop after implementation
 - `--resume` — resume from the most recent checkpoint in `.pipeline/`
 
@@ -133,7 +134,7 @@ These workflows are token-intensive by design — the value is in the diversity 
 | `/pipeline` | ~40 for a full run (brainstorm + implementation + review) |
 | `/meta/stress-test` | 1 (single agent, no teams) |
 
-Reduce cost with `--rounds 2 --agents 3`, or skip phases: `--skip-brainstorm`, `--skip-review`.
+Reduce cost with `--rounds 2 --agents 3`, skip phases (`--skip-brainstorm`, `--skip-review`), or resume from a previous brainstorm (`--from-brainstorm`).
 
 ---
 

@@ -21,6 +21,7 @@ For individual phases, use `/brainstorm` or `/review-fix` directly.
    - `--max-review-iterations N` — review-fix iterations (default: 3)
    - `--auto` — skip approval gates, proceed with top recommendation automatically. Passed through to review-fix as `--auto` (auto-fix medium+ findings without triage).
    - `--skip-brainstorm` — skip Phase 1 and Phase 2. Your arguments become the design brief directly — be specific about what to build and how. Phase 3 uses the arguments as the design description, with no brainstorm-derived risks, rejected approaches, or dissenting views available.
+   - `--from-brainstorm PATH` — skip Phase 1, use an existing brainstorm output file. PATH is the brainstorm output markdown file (e.g., `brainstorm-output.md`). The pipeline reads this file and enters Phase 2 (design approval) directly. All brainstorm-derived context (risks, rejected approaches, dissenting views) is extracted from the file as normal. Transcript files (`brainstorm-rN-transcript.md`) are used during final synthesis if they exist alongside the output file, but are not required.
    - `--skip-review` — stop after implementation, don't review
    - `--resume` — resume from the most recent checkpoint in `.pipeline/`. Read the most recent checkpoint (by filename timestamp; if multiple checkpoints share the same timestamp prefix, use the one with the highest `phase_completed` value — later phases take precedence; if still ambiguous, ask the user which checkpoint to resume from). Phase ordering for comparison: `brainstorm` < `design_approved` < `implementation` < `fix_iteration_1` < `fix_iteration_2` < ... < `review_complete`. Extract: (1) `phase_completed` — determines where to resume from; (2) `approved_design` — re-present this to the user and re-confirm before proceeding; (3) `design_brief_path` — read `.pipeline/design-brief.md` to restore the design brief deterministically; (4) `brainstorm_output_path` — for reference; (5) `files_created`/`files_modified` — use these as the Phase 4 review target if resuming after implementation. If a required field is missing from the checkpoint, ask the user to supply it. Re-confirms all outstanding approval gates before continuing — does not trust checkpoint's record of prior approvals. **Exception:** if `--auto` is also set, skip re-confirmation and proceed automatically. `--auto` takes precedence over `--resume`'s re-confirmation requirement.
 
@@ -30,7 +31,14 @@ Before writing the first checkpoint, ensure the `.pipeline/` directory exists. C
 
 ## Phase 1: BRAINSTORM
 
-Unless `--skip-brainstorm` was specified:
+If `--from-brainstorm PATH` was specified:
+
+1. Read the file at PATH. Verify it contains the required fields for Phase 2 (title, one-line description, support count, dissent summary for each recommendation). If any are missing, tell the user what's missing and stop.
+2. Print: `[Pipeline] Using existing brainstorm output: {PATH}. Skipping Phase 1.`
+3. Write a checkpoint to `.pipeline/checkpoint-{YYYYMMDD-HHmmss}.md` with: `phase_completed: brainstorm`, `brainstorm_output_path: {PATH}`, `timestamp: {ISO timestamp}`, `pipeline_version: 1.0`.
+4. Proceed to Phase 2.
+
+Unless `--skip-brainstorm` or `--from-brainstorm` was specified:
 
 Print: `[Pipeline] Starting Phase 1: Brainstorm. Running {n} rounds with {agents} agents per round.`
 
@@ -52,7 +60,7 @@ Proceed to Phase 2.
 
 ## Phase 2: APPROVE DESIGN
 
-If `--skip-brainstorm` is set, skip this phase entirely — proceed to Phase 3 with the arguments as the design description.
+If `--skip-brainstorm` is set (and `--from-brainstorm` is not), skip this phase entirely — proceed to Phase 3 with the arguments as the design description.
 
 ### Zero-recommendation fallback
 
@@ -311,7 +319,7 @@ Remaining: {count, with IDs and brief reasons}
 - **Approval gates are load-bearing.** The brainstorm → implementation gate prevents building the wrong thing. The triage gate in review-fix prevents fixing non-issues. Unless `--auto` is set, always pause for user input at these points. `--auto` takes precedence over `--resume`'s re-confirmation — when both are set, resume proceeds without pausing.
 - **The brainstorm document persists.** Even after implementation and review, the design rationale lives in the output file. This is valuable for onboarding, future changes, or understanding why a particular approach was chosen over alternatives.
 - **The design brief persists.** The extracted design brief is written to `.pipeline/design-brief.md` during Phase 2. This makes the brief deterministic on resume, reviewable, and editable. If you want to adjust what developers see, edit this file before resuming.
-- **Incremental use.** You don't have to run the full pipeline. Use `/brainstorm` alone for design decisions. Use `/review-fix` alone for existing code. Use `/pipeline --skip-brainstorm` when you already know what to build (your arguments become the design brief directly). Use `/pipeline --skip-review` when you want design + implementation without the review loop.
+- **Incremental use.** You don't have to run the full pipeline. Use `/brainstorm` alone for design decisions. Use `/review-fix` alone for existing code. Use `/pipeline --skip-brainstorm` when you already know what to build (your arguments become the design brief directly). Use `/pipeline --from-brainstorm brainstorm-output.md` to resume from a completed brainstorm session — the pipeline reads the output file and enters design approval directly. Use `/pipeline --skip-review` when you want design + implementation without the review loop.
 - **Design concerns from developers.** If a developer flags a concern during implementation that contradicts the brainstorm's design, the pipeline surfaces it as a gate before review. This is the mechanism for implementation-time discovery to influence the pipeline — the only point where information flows backward.
 - **No design feedback loop.** The pipeline is strictly linear — review cannot trigger re-brainstorm. If review reveals a design-level issue, stop the pipeline and re-run `/brainstorm` with the new information. This is a deliberate simplicity trade-off.
 - **Checkpoints.** Checkpoints do NOT contain finding evidence (file:line quotes), code snippets, full deliberation transcripts, or security-sensitive content — only structural decisions and artifact paths. The `--resume` flag reads the most recent checkpoint in `.pipeline/` and picks up from the last completed phase, re-confirming approval gates unless `--auto` is also set.
