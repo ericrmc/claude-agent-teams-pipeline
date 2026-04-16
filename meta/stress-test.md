@@ -67,7 +67,18 @@ Ask what the process **cannot** surface by design:
 - Where does the file-based handoff lose important information?
 - Are there feedback loops that should exist but don't? (e.g., can later phases inform earlier ones?)
 
-### Phase 5: Failure Modes Under Real Use
+### Phase 5: Execution Ergonomics
+
+These command files are not read by humans and executed by code — they are read by Claude and executed by Claude. The file is the program AND the runtime documentation, consumed in a single context window alongside working state. Analyze the file from the executor's perspective:
+
+- **Information ordering vs. execution ordering.** Is the information arranged in the order the executor needs it during execution, or in the order a human reader would want to understand the design? Reference material (role tables, format templates, prompt templates) placed before the execution steps forces the executor to read past material it doesn't need yet, displacing working memory.
+- **Execution path length.** How many lines must the executor hold in working memory to run the protocol? Can sections be deferred to appendices and consulted only when needed?
+- **Instructions vs. explanations.** Which lines are actionable steps ("Write the results file") vs. design rationale ("The file-based handoff is the only communication channel")? Rationale helps human readers understand the design but competes with execution instructions for context attention. Quantify the ratio.
+- **Template interruptions.** Large template blocks (agent prompts, file formats) embedded in the execution flow force the executor to parse around them to find the next step. Are templates separable into appendices?
+- **Context pressure points.** At which point in execution is the executor's context most loaded? (Usually: mid-round, after receiving all agent posts, while preparing to tally votes and write files.) Is the protocol text that's active at that point as concise as possible?
+- **Redundancy across files.** Are the same instructions repeated in multiple command files with slight variations? Each repetition is a maintenance hazard and a context cost. Identify duplicated prose that could drift.
+
+### Phase 6: Failure Modes Under Real Use
 
 Consider how the process behaves when things go wrong in practice:
 - What happens when an agent doesn't respond or gives low-quality output?
@@ -127,6 +138,14 @@ Things the process cannot surface by design.
 | Parameter | Default | Practical Max | What Breaks First |
 |-----------|---------|---------------|-------------------|
 | {name} | {value} | {value} | {description} |
+
+---
+
+## Execution Ergonomics
+
+| Aspect | Assessment | Lines affected |
+|--------|-----------|----------------|
+| {aspect from Phase 5} | {finding} | {line range or count} |
 
 ---
 
