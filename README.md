@@ -11,8 +11,13 @@ These commands guide Claude through structured protocols but are not determinist
 | `/brainstorm` | Multi-round ideation with diverse agent roles. Produces ranked recommendations that have survived cross-challenge and voting. |
 | `/review-fix` | Three independent reviewers find issues, then parallel developers fix them. Loops until clean. |
 | `/pipeline` | Chains brainstorm → user approval → parallel implementation → review-fix. The full design-to-verified-code workflow. |
-| `/meta/stress-test` | Structural audit of a command file or process design. Finds where the mechanism breaks, not whether the ideas are good. |
-| `/meta/feedback` | Post-session reflection. Surfaces execution friction and protocol gaps that only become visible by running the process. |
+
+**Meta commands** — for developing and improving the commands themselves:
+
+| Command | What it does |
+|---------|-------------|
+| `/meta/stress-test` | Structural audit of a command file. Finds where the mechanism breaks — parameter boundaries, rule conflicts, execution ergonomics. |
+| `/meta/feedback` | Post-session reflection. Run after a brainstorm or pipeline session to surface execution friction and protocol gaps. |
 
 ---
 
@@ -86,21 +91,6 @@ Three reviewers (correctness, robustness, quality) independently analyse the tar
 
 ---
 
-### `/meta/stress-test <target>`
-
-Reads a command file or process description and audits its *structure* — parameter boundaries, rule conflicts, degenerate cases, and blind spots. This is not a content review; it answers "where does this mechanism break?" rather than "are these ideas good?"
-
-**When to use it:**
-- After writing or significantly modifying a command file, before relying on it in production
-- When a process produced surprising or low-quality results and you're not sure if the problem was the input or the mechanism
-- When you've added configurable parameters (`--rounds`, `--agents`, etc.) and want to verify the design holds across the full parameter space
-- Periodically, as a form of structural regression testing — the process may have accumulated assumptions that no longer hold
-
-**Flags:**
-- `--output PATH` — output file path (default: `stress-test-output.md`)
-
----
-
 ### `/pipeline <task>`
 
 Chains `/brainstorm` and `/review-fix` around a parallel implementation phase. Brainstorm agents produce ranked design recommendations; the user approves one; developer agents implement it in parallel (with a conditional integration pass for cross-cutting interfaces); reviewer agents validate the result.
@@ -113,6 +103,40 @@ Chains `/brainstorm` and `/review-fix` around a parallel implementation phase. B
 - `--from-brainstorm PATH` — skip brainstorm, use an existing brainstorm output file (e.g., from a previous `/brainstorm` session)
 - `--skip-review` — stop after implementation
 - `--resume` — resume from the most recent checkpoint in `.pipeline/`
+
+---
+
+## Meta Commands
+
+These are for developing and improving the command files themselves. The core commands (`/brainstorm`, `/review-fix`, `/pipeline`) do the work; the meta commands help you improve how that work gets done.
+
+### `/meta/stress-test <target>`
+
+Audits a command file's *structure* — parameter boundaries, rule conflicts, degenerate cases, execution ergonomics, and blind spots. Answers "where does this mechanism break?" rather than "are the ideas good?"
+
+**When to use it:**
+- After writing or significantly modifying a command file
+- When a process produced surprising or low-quality results
+- Periodically, as structural regression testing
+
+**Flags:**
+- `--output PATH` — output file path (default: `stress-test-output.md`)
+
+### `/meta/feedback`
+
+Post-session reflection. Run this after a `/brainstorm`, `/review-fix`, or `/pipeline` session to capture what worked, what was hard, and what should change — from the executor's perspective.
+
+Brainstorm agents evaluate architecture theoretically. Stress-tests analyze mechanisms structurally. Neither captures the operational experience of actually running the protocol. This command fills that gap.
+
+**When to use it:**
+- After any session, especially early in a project when the commands are still being tuned
+- When a session produced good results but felt harder than it should have
+- When you want to propose changes to the command files based on real execution experience
+
+Run it in the same conversation where the session happened — the execution context is already in your history.
+
+**Flags:**
+- `--output PATH` — output file path (default: `feedback-{session-type}-{date}.md`)
 
 ---
 
@@ -145,8 +169,8 @@ Reduce cost with `--rounds 2 --agents 3`, skip phases (`--skip-brainstorm`, `--s
 - **Checkpoints.** `/pipeline` writes phase checkpoints to `.pipeline/`. If a run fails, `--resume` picks up from the last completed phase.
 - **Triage gate.** `/review-fix` pauses before fixing and lets you choose which findings to address.
 - **Design rationale persists.** The brainstorm output file survives after implementation — useful for onboarding or understanding why a particular approach was chosen.
-- **Stress-test your commands.** Agents inside a process can challenge each other's ideas but cannot challenge the process itself — they operate inside the frame the prompt sets. `/meta/stress-test` operates outside that frame. Run it after writing or changing a command file to catch structural issues before they surface as bad output.
 - **Re-run to converge.** Each pass catches what the previous one missed. Run `/pipeline` or `/review-fix` again on the same target and the severity of findings drops until there's nothing left worth fixing.
+- **Improve the commands themselves.** Run `/meta/feedback` after sessions to capture execution friction. Run `/meta/stress-test` after modifying a command file to catch structural issues.
 - **Early stopping.** If brainstorm rounds converge early (same ideas, no new dissent), remaining rounds are skipped automatically to save tokens.
 - **Observability.** Each phase prints a `[Status]` line with agent response counts and context estimates. Use these to tune parameters and diagnose quality issues.
 
