@@ -11,7 +11,7 @@ Orchestrate a multi-phase Agent Team workflow: independent structured review, tr
 1. Check that Agent Teams is enabled. If you cannot create an agent team, tell the user to add `"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"` to the `env` block in their settings.json, then stop.
 2. Parse the target from the arguments above. If no target is specified, ask the user what to review.
 3. Parse optional flags from the arguments:
-   - `--max-iterations N` — max review→fix loops (default: 3)
+   - `--max-iterations N` — max review→fix loops (default: 3, minimum: 1). If 0 is passed, treat as `--review-only`.
    - `--auto` — skip triage approval, auto-fix all medium+ findings
    - `--review-only` — stop after Phase 1, don't fix anything
 
@@ -23,7 +23,7 @@ Orchestrate a multi-phase Agent Team workflow: independent structured review, tr
 
 Create an agent team with 3 reviewer teammates. Each reviewer gets a **distinct lens** and the **same protocol block**. The protocol enforces independent analysis before group discussion — this is the most important part.
 
-Spawn each reviewer with their role name and the prompt below. Replace `{TARGET}` with the actual target, and `{LENS}` with the reviewer-specific section.
+Select 3 lenses following the rules below, then spawn each reviewer with their role name and the prompt. Replace `{TARGET}` with the actual target, and `{LENS}` with the reviewer-specific section.
 
 ---
 
@@ -64,6 +64,15 @@ Spawn each reviewer with their role name and the prompt below. Replace `{TARGET}
 ---
 
 #### Reviewer lenses
+
+The reference pool below covers the most common review concerns. You may substitute or synthesise lenses when the target demands it — e.g., a **security reviewer** for auth code, a **performance reviewer** for hot paths, or a **precision reviewer** for financial calculations. Synthesised lenses are first-class and follow the same protocol.
+
+**Selection rules:**
+1. Always include at least one correctness-style lens (logic, contracts, state) and one robustness-style lens (failure modes, input validation, resource management).
+2. The third lens should be chosen based on the target. Default to quality; substitute a domain-specific lens when the target has an obvious dominant concern.
+3. State your lens selections and reasoning before spawning.
+
+**Reference pool:**
 
 **correctness-reviewer:**
 > Logic errors, edge cases, off-by-one errors, incorrect assumptions, missing boundary validation, race conditions, wrong return types, broken contracts between functions, state that can become inconsistent.
@@ -114,11 +123,11 @@ Before proceeding to triage, confirm silently: (1) Shutdown request sent to all 
 
 ## Phase 2: TRIAGE
 
-If there are **no medium+ findings**, report the review found no medium or higher findings (list any low-severity findings for awareness) and stop.
+If there are **no findings at all**, report a clean review and stop.
 
 If `--review-only` was specified, present findings and stop.
 
-If `--auto` was specified, select all medium+ findings and proceed to Phase 3.
+If `--auto` was specified, select all medium+ findings and proceed to Phase 3. If there are only low findings with `--auto`, report them for awareness and stop.
 
 Otherwise, present findings to the user and ask:
 
@@ -127,6 +136,8 @@ Otherwise, present findings to the user and ask:
 > 2. All findings including low severity
 > 3. I'll pick — list the IDs to fix
 > 4. None — stop here
+
+If there are only low-severity findings, still present them with the same options but note: *"All findings are low severity. These are typically worth fixing in aggregate but are individually non-urgent."*
 
 ---
 
@@ -157,24 +168,34 @@ Create a new agent team. Spawn **1 developer per finding group** (max 4 develope
 > ### Rules
 >
 > 1. **Fix only your findings.** Do not refactor, reformat, or improve surrounding code.
-> 2. **Write a test for each fix** that would have caught the original issue. If a test framework is already in use, follow its conventions. If a finding is about missing tests, add the tests that were missing.
-> 3. **Run tests** to check you haven't broken anything. If tests fail for reasons unrelated to your changes, message the lead.
-> 4. **If you disagree with a finding** or believe it's a false positive, message the lead with your reasoning before skipping it.
-> 5. **When done**, message the lead with a short summary:
+> 2. **Declare your files first.** Before writing any code, message the lead with a list of all files you intend to modify or create (including test files). Wait for the lead to confirm there are no conflicts with other developers. Then proceed.
+> 3. **Write a test for each fix** that would have caught the original issue. If a test framework is already in use, follow its conventions. If a finding is about missing tests, add the tests that were missing.
+> 4. **Run the full test suite** to check you haven't broken anything — not just your own tests. If tests fail for reasons unrelated to your changes, message the lead.
+> 5. **If you disagree with a finding** or believe it's a false positive, message the lead with your reasoning before skipping it.
+> 6. **If a finding requires changes beyond your scope** (architectural restructuring, changes to files owned by other developers, design-level issues that a narrow fix can't resolve), message the lead with: `ESCALATE [Fn] — {reason and scope assessment}`. Do not attempt a partial fix that masks the real issue.
+> 7. **When done**, message the lead with a short summary:
 >    - Which findings you fixed (by ID)
 >    - Which you skipped (with reason)
+>    - Which you escalated (with scope assessment)
 >    - Which tests you added or modified
-> 6. Mark your task as complete.
+>    - Test suite results (pass/fail count)
+> 8. Mark your task as complete.
+
+### File declaration coordination
+
+After all developers have declared their intended files, check for conflicts. If two developers intend to modify the same file (including test files), reassign the conflicting finding to one developer and notify both. Only give the go-ahead once all file ownership is conflict-free.
 
 ### Wait and collect
 
-Wait for all developers to complete. Collect their summaries — note which findings were fixed, which were skipped with reasons.
+Wait for all developers to complete. Collect their summaries — note which findings were fixed, which were skipped, and which were escalated.
+
+**Escalated findings** are removed from the fix loop and presented to the user in the final summary as requiring manual intervention, with the developer's scope assessment. Do not attempt to fix escalated findings in subsequent iterations.
 
 Shut down all developers and clean up the team.
 
 ### Checkpoint: fix iteration complete
 
-Write a checkpoint to `.pipeline/checkpoint-{timestamp}.md` with: `phase_completed: fix_iteration_{n}`, `fixed_findings: {IDs}`, `skipped_findings: {IDs with reasons}`, `files_changed: {list}`, `timestamp`, `pipeline_version: 1.0`. Do NOT include code snippets, full deliberation transcripts, or implementation details — only structural metadata.
+Write a checkpoint to `.pipeline/checkpoint-{timestamp}.md` with: `phase_completed: fix_iteration_{n}`, `fixed_findings: {IDs}`, `skipped_findings: {IDs with reasons}`, `escalated_findings: {IDs with scope assessments}`, `files_changed: {list}`, `timestamp`, `pipeline_version: 1.0`. Do NOT include code snippets, full deliberation transcripts, or implementation details — only structural metadata.
 
 ---
 
@@ -217,9 +238,11 @@ Create a new agent team with **2 verifier teammates**.
 >
 > 3. **Scope:** Only review the changes and their immediate context. Do NOT re-review the whole codebase.
 >
-> 4. **Discuss with the other verifier.** If you disagree on whether something is VERIFIED or NOT_FIXED, discuss and try to reach agreement. If you can't agree, flag it for the lead.
+> 4. **Discuss with the other verifier.** If you disagree on whether something is VERIFIED or NOT_FIXED, discuss and try to reach agreement. If you can't agree, flag it for the lead with both positions and evidence.
 >
 > 5. Mark your task as complete when done.
+
+**Lead resolution for verifier disagreements:** If verifiers flag a disagreement, read both positions and the relevant code. Rule in favour of the position with more specific evidence. If evidence is equal, rule NOT_FIXED — it's cheaper to re-fix than to miss a real issue. Note the disagreement in the iteration summary.
 
 ### Collect verification results
 
@@ -237,17 +260,21 @@ Shut down verifiers and clean up the team.
 
 ## Phase 5: LOOP OR FINISH
 
-Count remaining items: NOT_FIXED + REGRESSED + new medium+ issues.
+Count remaining items: NOT_FIXED + REGRESSED + new medium+ issues. Exclude escalated findings — they have been removed from the loop.
 
 ### Oscillation check (runs first, before any other loop decision)
 
 On the first iteration (iteration 1), there is no previous list — skip the oscillation check and proceed directly to the loop/stop decision.
 
-On iteration 2+, compare the current NOT_FIXED/REGRESSED finding IDs against the previous iteration's NOT_FIXED/REGRESSED list. If any finding ID (e.g., R3, R7) appears as NOT_FIXED or REGRESSED in **two consecutive iterations**, stop immediately — do not spawn another fix cycle. Report to the user:
+On iteration 2+, two checks fire. Either one causes immediate escalation to the user, even if max iterations hasn't been reached.
 
-> "Stopping: oscillation detected. The following findings have failed to resolve in two consecutive iterations: {finding IDs and titles}. This typically indicates a structural conflict where fixing one finding breaks another. Please review these findings manually: {details of each oscillating finding, including severity, impact, and location}."
+**Check 1 — ID-based.** Compare the current NOT_FIXED/REGRESSED finding IDs against the previous iteration's list. If any finding ID (e.g., R3, R7) appears as NOT_FIXED or REGRESSED in **two consecutive iterations**, stop.
 
-This check fires **before** checking max iterations. Even if max iterations hasn't been reached, oscillation causes immediate escalation to the user.
+**Check 2 — Count-based.** Compare the total unresolved count (NOT_FIXED + REGRESSED + new issues) against the previous iteration's total. If the count has not decreased, stop. This catches new-issue chains where fixing R1 creates N1, fixing N1 creates N2 — different IDs each time, but the total never drops.
+
+Report to the user:
+
+> "Stopping: oscillation detected. {Check 1: 'The following findings have failed to resolve in two consecutive iterations: {IDs}.' | Check 2: 'Unresolved count is not decreasing ({previous} → {current}). Fixes are likely creating new issues at the same rate they resolve old ones.'} This typically indicates a structural conflict. Please review these findings manually: {details of each unresolved finding, including severity, impact, and location}."
 
 ### Loop or stop
 
@@ -266,6 +293,7 @@ This check fires **before** checking max iterations. Even if max iterations hasn
 Iterations: {n}
 Findings found: {total}
 Findings fixed and verified: {count}
+Findings escalated: {count, with IDs and scope assessments}
 Findings remaining: {count, with IDs and reasons}
 
 Files changed:
@@ -277,11 +305,15 @@ Tests added/modified:
 
 If any findings remain unresolved after max iterations, list them with their current status and recommend next steps.
 
+If any findings were escalated, present them in a separate section with the developer's scope assessment and a recommendation for how to approach the structural fix.
+
 ---
 
 ## Notes
 
 - **Token cost.** Each phase spawns a new team. A full iteration uses ~8 context windows (3 reviewers + up to 4 developers + 2 verifiers (developer count varies by finding count and grouping)). Multiple iterations multiply this. Be aware of cost on large targets.
-- **File conflicts.** The grouping step in Phase 3 is critical. If two developers edit the same file, one will overwrite the other. When in doubt, assign overlapping work to one developer.
+- **File conflicts.** The file declaration step in Phase 3 catches conflicts before code is written. If two developers need the same file, reassign before giving the go-ahead. This adds a coordination round-trip but prevents overwrites.
+- **Reviewer lenses.** The three reference lenses cover most targets, but substitute or synthesise lenses when the target has a dominant domain concern. Always keep at least one correctness-style and one robustness-style lens.
+- **Escalation.** Developers may escalate findings that require architectural changes beyond their scope. Escalated findings exit the fix loop and are presented to the user separately. This prevents narrow patches that mask deeper issues.
 - **Teammate discipline.** The structured finding format and independence protocol rely on prompt compliance. If a reviewer posts vague findings or doesn't follow the format, message them with a reminder before proceeding.
 - **Scope creep.** Developers are told to fix only assigned findings. If they message about other issues they noticed, acknowledge them but do not expand scope mid-iteration. Note them for a future run.
