@@ -22,7 +22,7 @@ For individual phases, use `/brainstorm` or `/review-fix` directly.
    - `--auto` — skip approval gates, proceed with top recommendation automatically. Passed through to review-fix as `--auto` (auto-fix medium+ findings without triage).
    - `--skip-brainstorm` — skip Phase 1 and Phase 2. Your arguments become the design brief directly — be specific about what to build and how. Phase 3 uses the arguments as the design description, with no brainstorm-derived risks, rejected approaches, or dissenting views available.
    - `--skip-review` — stop after implementation, don't review
-   - `--resume` — resume from the most recent checkpoint in `.pipeline/`. Read the most recent checkpoint (by filename timestamp; if multiple checkpoints share the same timestamp prefix, use the one with the highest `phase_completed` value — later phases take precedence; if still ambiguous, ask the user which checkpoint to resume from). Extract: (1) `phase_completed` — determines where to resume from; (2) `approved_design` — re-present this to the user and re-confirm before proceeding; (3) `design_brief_path` — read `.pipeline/design-brief.md` to restore the design brief deterministically; (4) `brainstorm_output_path` — for reference; (5) `files_created`/`files_modified` — use these as the Phase 4 review target if resuming after implementation. If a required field is missing from the checkpoint, ask the user to supply it. Re-confirms all outstanding approval gates before continuing — does not trust checkpoint's record of prior approvals. **Exception:** if `--auto` is also set, skip re-confirmation and proceed automatically. `--auto` takes precedence over `--resume`'s re-confirmation requirement.
+   - `--resume` — resume from the most recent checkpoint in `.pipeline/`. Read the most recent checkpoint (by filename timestamp; if multiple checkpoints share the same timestamp prefix, use the one with the highest `phase_completed` value — later phases take precedence; if still ambiguous, ask the user which checkpoint to resume from). Phase ordering for comparison: `brainstorm` < `design_approved` < `implementation` < `fix_iteration_1` < `fix_iteration_2` < ... < `review_complete`. Extract: (1) `phase_completed` — determines where to resume from; (2) `approved_design` — re-present this to the user and re-confirm before proceeding; (3) `design_brief_path` — read `.pipeline/design-brief.md` to restore the design brief deterministically; (4) `brainstorm_output_path` — for reference; (5) `files_created`/`files_modified` — use these as the Phase 4 review target if resuming after implementation. If a required field is missing from the checkpoint, ask the user to supply it. Re-confirms all outstanding approval gates before continuing — does not trust checkpoint's record of prior approvals. **Exception:** if `--auto` is also set, skip re-confirmation and proceed automatically. `--auto` takes precedence over `--resume`'s re-confirmation requirement.
 
 Before writing the first checkpoint, ensure the `.pipeline/` directory exists. Create it if it does not.
 
@@ -37,6 +37,8 @@ Print: `[Pipeline] Starting Phase 1: Brainstorm. Running {n} rounds with {agents
 Read `~/.claude/commands/brainstorm.md` and follow its full protocol, using the task as the problem statement. Pass through `--rounds`, `--keep`, and `--agents` flags.
 
 This produces a brainstorm output markdown file with ranked recommendations, plus per-round working files (`brainstorm-rN-results.md` and `brainstorm-rN-transcript.md`).
+
+**Required fields for Phase 2:** The brainstorm output must contain, for each surviving recommendation: title, one-line description, support count (X/Y agents), and dissent summary (role + concern, or "None"). Phase 2 cannot present recommendations without these.
 
 When the brainstorm is complete:
 
@@ -152,57 +154,71 @@ Do NOT include: cut ideas, honourable mentions, the process log, or the full cha
 
 If the brief was not already written to `.pipeline/design-brief.md` during Phase 2, write it now.
 
+**Required fields for developers:** The design brief must contain: (1) what to build, (2) why this approach, (3) known risks, (4) implementation notes, (5) relevant dissenting views, (6) rejected approaches. If `--skip-brainstorm` is set, items 3-6 may be unavailable — note this explicitly so developers apply their own judgement.
+
 #### Developer spawn prompt
 
 > You are implementing part of a design that was produced through structured multi-agent brainstorming.
 >
-> **Overall design:**
-> {what's being built — the approved recommendation's full description}
->
-> **Why this approach:**
-> {one paragraph: why this was chosen, what alternatives were considered and why they were rejected}
->
-> **Your task:**
-> {specific task description — what to build, which files to create or modify}
->
-> **Known risks to build around:**
-> {risks from the brainstorm with their proposed mitigations — these are pre-identified failure modes, not speculative concerns}
->
-> **Implementation notes:**
-> {concrete suggestions from brainstorm agents relevant to your task}
->
-> **Relevant concerns (from ops/security/performance reviewers):**
-> {dissenting views from those roles that translate into implementation decisions — e.g., "the ops engineer flagged that this needs structured logging for incident response"}
->
-> **Rejected approaches (do not re-introduce):**
-> {list of rejected approaches from the design brief, each as: "- approach name: why it was rejected"}
->
-> **Interfaces with other tasks:**
-> {if this task has dependencies or dependents, describe the contracts: what this task expects to receive and what it should expose}
->
-> ### Rules
->
+> <rules>
 > 1. **Implement your task only.** Do not expand scope. If you think something is missing from the design, message the lead.
 > 2. **Write tests** for your implementation. Follow existing project conventions.
 > 3. **Follow project conventions.** Read CLAUDE.md and look at existing patterns before writing new code.
 > 4. **Design decisions are already made.** The brainstorm considered alternatives and this direction was chosen for documented reasons. If you disagree with a design choice, message the lead with your concern rather than silently deviating.
-> 5. **When done**, message the lead with:
->    - What you built
->    - Files created or modified
->    - Tests added
->    - Interface references (if any): file paths, module names, or function names your task exposes or depends on from other tasks
->    - Any concerns or decisions you had to make that weren't covered by the design
-> 6. Mark your task as complete.
+> </rules>
+>
+> <design>
+> {what's being built — the approved recommendation's full description}
+>
+> Why this approach: {one paragraph: why this was chosen, what alternatives were considered and why they were rejected}
+> </design>
+>
+> <task>
+> {specific task description — what to build, which files to create or modify}
+> </task>
+>
+> <risks>
+> {risks from the brainstorm with their proposed mitigations — these are pre-identified failure modes, not speculative concerns}
+> </risks>
+>
+> <context>
+> Implementation notes: {concrete suggestions from brainstorm agents relevant to your task}
+>
+> Relevant concerns (from ops/security/performance reviewers): {dissenting views from those roles that translate into implementation decisions — e.g., "the ops engineer flagged that this needs structured logging for incident response"}
+> </context>
+>
+> <rejected>
+> {list of rejected approaches from the design brief, each as: "- approach name: why it was rejected". Do not re-introduce these.}
+> </rejected>
+>
+> <interfaces>
+> {if this task has dependencies or dependents, describe the contracts: what this task expects to receive and what it should expose}
+> </interfaces>
+>
+> <completion>
+> When done, message the lead with:
+> - What you built
+> - Files created or modified
+> - Tests added
+> - Interface references (if any): file paths, module names, or function names your task exposes or depends on from other tasks
+> - Any concerns or decisions you had to make that weren't covered by the design
+>
+> Mark your task as complete.
+> </completion>
 
 ### Wait and collect
 
 Wait for all developers to complete. Collect their summaries.
 
-**Integration check:** Review each developer's completion summary. If 2 or more developers' "Interface references" sections reference the same file path, module name, or function name, spawn one additional sequential integration developer with this prompt:
+**Integration check:** Review each developer's completion summary. If 2 or more developers' "Interface references" sections reference the same file path, module name, or function name:
+
+1. **Check for existing integration tests.** Look for test files that import or reference the modules being changed (e.g., test files containing import statements or references to the shared interfaces). Search the project's test directories and any co-located test files.
+2. **If integration tests exist** for the changed modules, verify they are not stale — they should have been modified within the current session or reference the specific interfaces from the developer completion summaries, not just the module name in general. If test relevance is uncertain, err on the side of spawning the integration developer. If the tests are relevant, skip the integration developer — the existing test suite will catch interface mismatches. Note in the implementation summary: "Integration developer skipped — existing integration tests cover {modules}."
+3. **If no integration tests exist**, spawn one additional sequential integration developer with this prompt:
 
 > You are an integration developer. The parallel implementation phase is complete. Your job is narrow: verify that the interface contracts between tasks are consistent. Read the developer completion summaries and the files they reference. Look for mismatched function signatures, inconsistent type definitions, module exports that don't match their imports, and shared config or entry-point files that multiple tasks touched. Fix only these interface-level mismatches — do not refactor implementations. Run the full test suite after making changes. When done, message the lead with: what you changed, what you verified, which files you touched, and test results.
 
-If all developers reported independent tasks with no shared interface references, skip this step.
+If all developers reported independent tasks with no shared interface references, skip this step entirely.
 
 Shut down all developers and clean up the team.
 
@@ -232,6 +248,8 @@ Before proceeding to Phase 4, confirm silently: (1) Shutdown request sent to all
 ### Record what was built
 
 Compile a list of all files created or modified and all tests added. This becomes the target for Phase 4.
+
+**Required fields for Phase 4:** The review-fix target must include: list of files created, list of files modified, and list of tests added. If any list is empty, state "None" explicitly.
 
 ---
 

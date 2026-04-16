@@ -44,6 +44,7 @@ Select 3 lenses following the rules below, then spawn each reviewer with their r
 > ```
 > [F{n}] {short title}
 > Severity: critical | high | medium | low
+> *(Calibrate severity as: critical = data loss, security breach, or crash. high = incorrect behavior for common inputs. medium = incorrect behavior for edge cases or under load. low = style, naming, or convention violation.)*
 > Impact: {what goes wrong if unfixed}
 > Evidence: {file:line — quote the problematic code}
 > Confidence: high | medium | low
@@ -90,6 +91,7 @@ The reference pool below covers the most common review concerns. You may substit
 Print: `[Review] Spawning 3 reviewers (correctness, robustness, quality). This may take a moment.`
 
 1. **Wait for independent findings.** Monitor messages. Each reviewer should post their `[Fn]` findings before reading others. Do not rush this — wait until all 3 have posted. Then print: `[Review] All 3 reviewers posted findings. Starting cross-review.`
+   - **Compliance check:** Before triggering cross-review, verify each reviewer's post contains `[F{n}]` format markers. If a reviewer posted findings without the structured format, send a one-shot correction: *"Please reformat your findings using `[F{n}]` markers with the required fields (Severity, Impact, Evidence, Confidence)."* Proceed once corrected or after one reminder — do not loop.
 2. **Trigger cross-review.** Once all independent findings are posted, broadcast: *"All independent analyses are in. Please read each other's findings and respond with CONFIRM, DISPUTE, or ADD."*
 3. **Let discussion settle.** Allow 1-2 rounds of back-and-forth. If reviewers are going in circles, broadcast: *"Please finalise your positions — we're moving to synthesis."*
 4. **Shut down and clean up.** Ask all reviewers to shut down, then clean up the team.
@@ -110,6 +112,8 @@ Present as a summary table:
 |----|-------|----------|--------|--------|----------|
 
 Print: `[Review] Synthesis complete. {n} findings ({critical} critical, {high} high, {medium} medium, {low} low).`
+
+**Required fields for triage:** Each finding passed to Phase 2 must have: ID *(mandatory)*, title *(mandatory)*, severity *(mandatory)*, impact *(mandatory)*, location *(mandatory)*, agreed count. Findings missing mandatory fields should be fixed during synthesis before proceeding.
 
 ### Checkpoint: review complete
 
@@ -139,6 +143,8 @@ Otherwise, present findings to the user and ask:
 
 If there are only low-severity findings, still present them with the same options but note: *"All findings are low severity. These are typically worth fixing in aggregate but are individually non-urgent."*
 
+**Required fields for implementation:** Each finding passed to Phase 3 must include: finding ID, title, severity, impact, evidence (with file:line), location. Developers cannot act on findings without specific evidence and location.
+
 ---
 
 ## Phase 3: IMPLEMENT
@@ -161,25 +167,29 @@ Create a new agent team. Spawn **1 developer per finding group** (max 4 develope
 
 > You are fixing specific code review findings. Fix only what's assigned — nothing else.
 >
-> **Your assigned findings:**
->
+> <findings>
 > {paste full finding details: ID, title, severity, impact, evidence, location}
+> </findings>
 >
-> ### Rules
->
+> <rules>
 > 1. **Fix only your findings.** Do not refactor, reformat, or improve surrounding code.
-> 2. **Declare your files first.** Before writing any code, message the lead with a list of all files you intend to modify or create (including test files). Wait for the lead to confirm there are no conflicts with other developers. Then proceed.
-> 3. **Write a test for each fix** that would have caught the original issue. If a test framework is already in use, follow its conventions. If a finding is about missing tests, add the tests that were missing.
-> 4. **Run the full test suite** to check you haven't broken anything — not just your own tests. If tests fail for reasons unrelated to your changes, message the lead.
-> 5. **If you disagree with a finding** or believe it's a false positive, message the lead with your reasoning before skipping it.
-> 6. **If a finding requires changes beyond your scope** (architectural restructuring, changes to files owned by other developers, design-level issues that a narrow fix can't resolve), message the lead with: `ESCALATE [Fn] — {reason and scope assessment}`. Do not attempt a partial fix that masks the real issue.
-> 7. **When done**, message the lead with a short summary:
->    - Which findings you fixed (by ID)
->    - Which you skipped (with reason)
->    - Which you escalated (with scope assessment)
->    - Which tests you added or modified
->    - Test suite results (pass/fail count)
-> 8. Mark your task as complete.
+> 2. **Declare your files first.** Before writing any code, message the lead with all files you intend to modify or create (including test files). Wait for conflict-free confirmation before proceeding.
+> 3. **Write a test for each fix** that would have caught the original issue. Follow existing test framework conventions.
+> 4. **ESCALATE, don't patch.** If a finding requires architectural changes, changes to files owned by other developers, or design-level fixes, message the lead with: `ESCALATE [Fn] — {reason and scope assessment}`. Do not attempt a partial fix that masks the real issue.
+> 5. Run the full test suite after your changes. If unrelated tests fail, message the lead.
+> 6. If you disagree with a finding, message the lead with reasoning before skipping it.
+> </rules>
+>
+> <completion>
+> When done, message the lead with a summary:
+> - Finding IDs fixed
+> - Finding IDs skipped (with reason)
+> - Finding IDs escalated (with scope assessment)
+> - Tests added or modified
+> - Test suite results (pass/fail count)
+>
+> Then mark your task as complete.
+> </completion>
 
 ### File declaration coordination
 
@@ -192,6 +202,8 @@ Wait for all developers to complete. Collect their summaries — note which find
 **Escalated findings** are removed from the fix loop and presented to the user in the final summary as requiring manual intervention, with the developer's scope assessment. Do not attempt to fix escalated findings in subsequent iterations.
 
 Shut down all developers and clean up the team.
+
+**Required fields for verification:** Each developer summary must contain: finding IDs fixed, finding IDs skipped (with reasons), finding IDs escalated (with scope assessment), files changed, test results (pass/fail count). If a summary is missing required fields, follow up with the developer before proceeding.
 
 ### Checkpoint: fix iteration complete
 
@@ -232,6 +244,7 @@ Create a new agent team with **2 verifier teammates**.
 >    ```
 >    [N{n}] {title}
 >    Severity: ...
+>    *(Calibrate severity as: critical = data loss, security breach, or crash. high = incorrect behavior for common inputs. medium = incorrect behavior for edge cases or under load. low = style, naming, or convention violation.)*
 >    Impact: ...
 >    Evidence: ...
 >    ```
@@ -251,7 +264,7 @@ Wait for both verifiers to complete. Print: `[Verify] Iteration {n}: {verified} 
 Synthesise:
 - **VERIFIED** → done, remove from active list
 - **NOT_FIXED** → goes back to Phase 3, preserving its original finding ID
-- **REGRESSED** → goes back to Phase 3 with escalated severity, preserving its original finding ID. A finding that REGRESSed in this iteration should be carried forward with its original ID — do not assign a new ID to a regressed finding.
+- **REGRESSED** → goes back to Phase 3 with escalated severity, preserving its original finding ID. Escalate severity by one level: low → medium, medium → high, high → critical. Critical stays critical. A finding that REGRESSed in this iteration should be carried forward with its original ID — do not assign a new ID to a regressed finding.
 - **New issues (medium+)** → added to the fix list for Phase 3. New IDs are only for issues first discovered during verification that were not in the original finding set.
 
 Shut down verifiers and clean up the team.
