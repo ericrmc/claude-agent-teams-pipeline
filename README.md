@@ -12,6 +12,7 @@ These commands guide Claude through structured protocols but are not determinist
 | `/review-fix` | Three independent reviewers find issues, then parallel developers fix them. Loops until clean. |
 | `/pipeline` | Chains brainstorm → user approval → parallel implementation → review-fix. The full design-to-verified-code workflow. |
 | `/meta/stress-test` | Structural audit of a command file or process design. Finds where the mechanism breaks, not whether the ideas are good. |
+| `/meta/feedback` | Post-session reflection. Surfaces execution friction and protocol gaps that only become visible by running the process. |
 
 ---
 
