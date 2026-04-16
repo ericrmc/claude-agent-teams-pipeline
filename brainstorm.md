@@ -154,6 +154,8 @@ The main orchestrator spawns a round-lead agent with instructions to follow this
 
 Before spawning, emit a status line: `[Round {n}/{total}] Spawning {agent count} agents: {role list}`
 
+**Fetch team tools first.** The tools for creating and managing agent teams are deferred — they must be fetched before use. Call `ToolSearch` with `query: "select:TeamCreate,SendMessage,TeamDelete"` and wait for the schemas to load. Only proceed once these tools are available.
+
 Create a new team (`brainstorm-r{n}`) and spawn {round agent count} teammates with the selected roles.
 
 **Do not summarise or analyse the codebase before spawning agents.** The problem statement and any surviving ideas from previous rounds are sufficient context. Reading and summarising the codebase dilutes the prompt with potentially inaccurate information and wastes context window. If agents need to understand specific code to brainstorm effectively, they can read it themselves.
